@@ -223,10 +223,6 @@ lmw_est.lmw <- function(x, outcome, data = NULL, robust = TRUE, cluster = NULL, 
 
   call <- match.call()
 
-  if (!inherits(x, "lmw")) {
-    stop("'x' must be an lmw object.", call. = FALSE)
-  }
-
   data <- get_data(data, x)
 
   #Get model matrix
@@ -279,12 +275,12 @@ lmw_est.lmw <- function(x, outcome, data = NULL, robust = TRUE, cluster = NULL, 
     if (is.null(cluster)) robust <- "const"
     else {
       robust <- "HC1"
-      warning("Setting robust = \"HC1\" because 'cluster' is non-NULL.", call. = FALSE)
+      chk::wrn("setting `robust = \"HC1\"` because `cluster` is non-`NULL`")
     }
   }
   else if (!is.character(robust) || length(robust) != 1 ||
            !robust %in% eval(formals(sandwich::vcovHC.default)$type)) {
-    stop("'robust' must be TRUE, FALSE, or one of the allowable inputs to the 'type' argument of sandwich::vcovHC().", call. = FALSE)
+    chk::err("`robust` must be `TRUE`, `FALSE`, or one of the allowable inputs to the `type` argument of `sandwich::vcovHC()`")
   }
 
   #Subset model outputs to those with positive weights
@@ -312,14 +308,15 @@ lmw_est.lmw <- function(x, outcome, data = NULL, robust = TRUE, cluster = NULL, 
 
     if (nrow(cluster) == nrow(data)) cluster <- cluster[pos_w,, drop = FALSE]
     else if (nrow(cluster) != length(pos_w)) {
-      stop("'cluster' must have the same number of rows as the original data set.", call. = FALSE)
+      chk::err("`cluster` must have the same number of rows as the original data set")
     }
 
     withCallingHandlers({
       fit$vcov <- sandwich::vcovCL(fit_sub, type = robust, cluster = cluster, ...)
     },
     warning = function(w) {
-      if (conditionMessage(w) != "clustered HC2/HC3 are only applicable to (generalized) linear regression models") warning(w)
+      if (conditionMessage(w) != "clustered HC2/HC3 are only applicable to (generalized) linear regression models")
+        chk::wrn(w, tidy = FALSE)
       invokeRestart("muffleWarning")
     })
   }
@@ -328,6 +325,11 @@ lmw_est.lmw <- function(x, outcome, data = NULL, robust = TRUE, cluster = NULL, 
   if (!is.null(x$fixef) && robust %in% c("const", "HC1")) {
     n <- length(pos_w)
     fit$vcov <- fit$vcov * (n - ncol(fit$model.matrix))/fit$df.residual
+  }
+
+  #For cluster SE, adjust df as the min number of clusters across clustering variables
+  if (!is.null(cluster)) {
+    fit$df.residual <- min(vapply(cluster, function(cl) length(unique(cl)), numeric(1L))) - 1
   }
 
   fit$lmw.weights <- x$weights
@@ -342,7 +344,7 @@ lmw_est.lmw <- function(x, outcome, data = NULL, robust = TRUE, cluster = NULL, 
   fit
 }
 
-#' @exportS3Method print lmw
+#' @exportS3Method print lmw_est
 print.lmw_est <- function(x, ...) {
   cat(sprintf("An %s object\n", class(x)[1]))
   cat(" - outcome:", x$outcome, "\n")

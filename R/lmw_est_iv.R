@@ -92,15 +92,17 @@ lmw_est.lmw_iv <- function(x, outcome, data = NULL, robust = TRUE, cluster = NUL
     else robust <- "HC1"
   }
   else if (isFALSE(robust)) {
-    if (is.null(cluster)) robust <- "const"
+    if (is.null(cluster)) {
+      robust <- "const"
+    }
     else {
       robust <- "HC1"
-      warning("Setting robust = \"HC1\" because 'cluster' is non-NULL.", call. = FALSE)
+      chk::wrn("setting `robust = \"HC1\"` because `cluster` is non-`NULL`")
     }
   }
   else if (!is.character(robust) || length(robust) != 1 ||
            !robust %in% eval(formals(sandwich::vcovHC.default)$type)) {
-    stop("'robust' must be TRUE, FALSE, or one of the allowable inputs to the 'type' argument of sandwich::vcovHC().", call. = FALSE)
+    chk::err("`robust` must be `TRUE`, `FALSE`, or one of the allowable inputs to the `type` argument of `sandwich::vcovHC()`")
   }
 
   if (is.null(cluster)) {
@@ -109,7 +111,7 @@ lmw_est.lmw_iv <- function(x, outcome, data = NULL, robust = TRUE, cluster = NUL
   else {
     if (inherits(cluster, "formula")) {
       cluster <- model.frame(cluster,
-                             data = data[pos_w,, drop = FALSE],
+                             data = data,
                              na.action = na.pass)
     }
     else {
@@ -118,7 +120,7 @@ lmw_est.lmw_iv <- function(x, outcome, data = NULL, robust = TRUE, cluster = NUL
 
     if (nrow(cluster) == nrow(data)) cluster <- cluster[pos_w,, drop = FALSE]
     else if (nrow(cluster) != length(pos_w)) {
-      stop("'cluster' must have the same number of rows as the original data set.", call. = FALSE)
+      chk::err("`cluster` must have the same number of rows as the original data set")
     }
 
     withCallingHandlers({
@@ -126,7 +128,7 @@ lmw_est.lmw_iv <- function(x, outcome, data = NULL, robust = TRUE, cluster = NUL
     },
     warning = function(w) {
       if (conditionMessage(w) != "clustered HC2/HC3 are only applicable to (generalized) linear regression models") {
-        warning(w)
+        chk::wrn(w, tidy = FALSE)
       }
       invokeRestart("muffleWarning")
     })
@@ -135,6 +137,11 @@ lmw_est.lmw_iv <- function(x, outcome, data = NULL, robust = TRUE, cluster = NUL
   if (!is.null(x$fixef) && robust %in% c("const", "HC1")) {
     n <- length(pos_w)
     fit$vcov <- fit$vcov * (n - ncol(fit$model.matrix))/fit$df.residual
+  }
+
+  #For cluster SE, adjust df as the min number of clusters across clustering variables
+  if (!is.null(cluster)) {
+    fit$df.residual <- min(vapply(cluster, function(cl) length(unique(cl)), numeric(1L))) - 1
   }
 
   fit$lmw.weights <- x$weights
@@ -163,5 +170,6 @@ bread.lmw_est_iv <- function(x, ...) {
 
   b <- cov.unscaled * n
   dimnames(b) <- list(names(x$coefficients)[p1], names(x$coefficients)[p1])
-  return(b)
+
+  b
 }

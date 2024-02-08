@@ -2,8 +2,11 @@ get_w_from_X <- function(X, treat, method, base.weights = NULL, s.weights = NULL
                          fixef = NULL) {
 
   if (is.null(s.weights)) s.weights <- rep(1, nrow(X))
-  if (is.null(base.weights) || dr.method == "AIPW") w <- s.weights
-  else w <- s.weights*base.weights
+
+  w <- s.weights
+  if (!is.null(base.weights) && dr.method != "AIPW") {
+    w <- w * base.weights
+  }
 
   if (method == "URI") {
     t <- X[,2]
@@ -11,7 +14,7 @@ get_w_from_X <- function(X, treat, method, base.weights = NULL, s.weights = NULL
 
   if (!is.null(fixef)) {
     if (!is.null(base.weights) && dr.method == "AIPW") {
-      stop("Fixed effects cannot be used with AIPW.", call. = FALSE)
+      chk::err("fixed effects cannot be used with AIPW")
     }
     for (i in seq_len(ncol(X))) {
       X[,i] <- demean(X[,i], fixef, w)
@@ -26,8 +29,6 @@ get_w_from_X <- function(X, treat, method, base.weights = NULL, s.weights = NULL
 
   #Remove linearly dependent columns
   X <- X[, qr_X$pivot[1:p], drop = FALSE]
-
-  if (is.null(s.weights)) s.weights <- rep(1, nrow(X))
 
   if (method == "URI") {
     #Treated group dummy always in second column
@@ -49,7 +50,7 @@ get_w_from_X <- function(X, treat, method, base.weights = NULL, s.weights = NULL
 
   if (!is.null(base.weights) && dr.method == "AIPW") {
 
-    ipw.weights <- base.weights*s.weights
+    ipw.weights <- base.weights * s.weights
     for (i in levels(treat)) {
       ipw.weights[treat == i] <- ipw.weights[treat == i]/sum(ipw.weights[treat == i])
     }
@@ -59,22 +60,35 @@ get_w_from_X <- function(X, treat, method, base.weights = NULL, s.weights = NULL
     if (method == "URI") {
       #For multicategory treatments, set base.weights of groups not
       # involved in contrast to 0
-      if (nlevels(treat) > 2) ipw.weights[!treat %in% levels(treat)[1:2]] <- 0
+      if (nlevels(treat) > 2) ipw.weights_rw[!treat %in% levels(treat)[1:2]] <- 0
 
       #Funky formula for augmentation weights, but it works
-      ipw.weights[t == 0] <- -ipw.weights[t == 0]
+      ipw.weights_rw[t == 0] <- -ipw.weights_rw[t == 0]
       aug.weights <- rw * .lm.fit(rw * X, ipw.weights_rw)$residuals
       aug.weights[t == 0] <- -aug.weights[t == 0]
     }
     else { #MRI
-
       aug.weights <- rw * .lm.fit(rw * X, ipw.weights_rw)$residuals
     }
 
     weights <- weights + aug.weights
   }
 
-  return(drop(weights))
+  weights <- drop(weights)
+
+  #Rescale weights to have a mean of 1 in each group
+  if (method == "URI" && nlevels(treat) > 2) {
+    for (i in 0:1) {
+      weights[t == i] <- weights[t == i] / mean(weights[t == i])
+    }
+  }
+  else {
+    for (i in levels(treat)) {
+      weights[treat == i] <- weights[treat == i] / mean(weights[treat == i])
+    }
+  }
+
+  weights
 }
 
 get_w_from_X_iv <- function(X, A, treat, method, base.weights = NULL, s.weights = NULL, fixef = NULL) {
@@ -84,8 +98,11 @@ get_w_from_X_iv <- function(X, A, treat, method, base.weights = NULL, s.weights 
   iv_names <- attr(X, "iv_names")
 
   if (is.null(s.weights)) s.weights <- rep(1, nrow(X))
-  if (is.null(base.weights)) w <- s.weights
-  else w <- s.weights*base.weights
+
+  w <- s.weights
+  if (!is.null(base.weights)) {
+    w <- w * base.weights
+  }
 
   rw <- sqrt(w)
 
@@ -108,7 +125,7 @@ get_w_from_X_iv <- function(X, A, treat, method, base.weights = NULL, s.weights 
     rw * .lm.fit(rw * X, rw * A)$residuals
 
   if (ncol(A) == 1) {
-    weights <- weights_ / sum(A * weights_)
+    weights <- weights_ #/ sum(A * weights_)
     weights[treat == levels(treat)[1]] <- -weights[treat == levels(treat)[1]]
   }
   else {
@@ -117,5 +134,10 @@ get_w_from_X_iv <- function(X, A, treat, method, base.weights = NULL, s.weights 
     weights[treat == levels(treat)[1]] <- -weights[treat == levels(treat)[1]]
   }
 
-  return(weights)
+  #Rescale weights to have a mean of 1 in each group
+  for (i in levels(treat)) {
+    weights[treat == i] <- weights[treat == i] / mean(weights[treat == i])
+  }
+
+  weights
 }

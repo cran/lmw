@@ -71,13 +71,13 @@ plot.summary.lmw <- function(x, stats, abs = TRUE, var.order = "data", threshold
   weighted <- !is.null(x[["bal.weighted"]])
 
   if (!un && !base.weighted && !weighted) {
-    stop("plot() can only be used on summary.lmw objects when stat = \"balance\" was specified in the call to summary().", call. = FALSE)
+    chk::err("`plot()` can only be used on summary.lmw objects when `stat = \"balance\"` was specified in the call to `summary()`")
   }
 
   standard.sum <- if (un) x[["bal.un"]] else x[["bal.weighted"]]
 
   if (!any(startsWith(colnames(standard.sum), "TSMD"))) {
-    stop("Not appropriate for unstandardized summary. Run summary() with the standardize = TRUE option, and then plot.", call. = FALSE)
+    chk::err("not appropriate for unstandardized summary. Run `summary()` with the `standardize = TRUE` option, and then plot")
   }
 
   if (missing(stats)) {
@@ -97,9 +97,15 @@ plot.summary.lmw <- function(x, stats, abs = TRUE, var.order = "data", threshold
 
   var.names <- rownames(standard.sum)
 
+  chk::chk_string(var.order)
+  var.order <- tolower(var.order)
   var.order <- match_arg(var.order, c("data", "alphabetical", "unadjusted"[un]))
 
+  chk::chk_string(layout)
+  layout <- tolower(layout)
   layout <- match_arg(layout, c("vertical", "horizontal"))
+
+  chk::chk_flag(abs)
 
   if (abs) {
     if (un) {
@@ -130,6 +136,7 @@ plot.summary.lmw <- function(x, stats, abs = TRUE, var.order = "data", threshold
 
   if (layout == "vertical") layout(do.call("rbind", as.list(seq_along(stats))))
   else if (layout == "horizontal") layout(do.call("cbind", as.list(seq_along(stats))))
+
   par(mar=c(3.75, 6.5, 1.25, 0.5),
       mgp=c(1.5, 0.5, 0))
 
@@ -206,12 +213,11 @@ rename_summary_stat <- function(x, abs = FALSE) {
   if (endsWith(stat, "KS")) stat <- paste(stat, "statistic")
   else if (endsWith(stat, "SMD") && abs) stat <- sub("SMD", "ASMD", stat, fixed = TRUE)
 
-  if (length(splitted) > 1) {
-    group <- paste(splitted[-1], collapse = " ")
-    if (tolower(group) %in% c("treated", "control")) {
-      group <- paste(tolower(group), "group")
-    }
-    sprintf("%s (%s)", stat, group)
+  if (length(splitted) == 1) return(stat)
+
+  group <- paste(splitted[-1], collapse = " ")
+  if (tolower(group) %in% c("treated", "control")) {
+    group <- paste(tolower(group), "group")
   }
-  else stat
+  sprintf("%s (%s)", stat, group)
 }

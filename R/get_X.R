@@ -11,7 +11,9 @@ get_X_from_formula <- function(formula, data, treat, method, estimand, target = 
 
   mf <- model.frame(formula_without_treat, data = data, na.action = "na.pass")
 
-  if (anyNA(mf)) stop("Missing values are not allowed in the covariates.", call. = FALSE)
+  if (anyNA(mf)) {
+    chk::err("missing values are not allowed in the covariates")
+  }
 
   mf <- process_mf(mf)
 
@@ -27,7 +29,7 @@ get_X_from_formula <- function(formula, data, treat, method, estimand, target = 
 
   #Center covariates at mean based on estimand; only affects weights if there
   #are interactions w/ treatment
-  covs <- scale_covs(covs, treat, target, s.weights, focal)
+  covs <- center_covs(covs, treat, target, s.weights, focal)
 
   if (is.null(treat_fixed)) {
     t_mat <- do.call("cbind", lapply(levels(treat)[-1], function(j) as.numeric(treat == j)))
@@ -46,16 +48,15 @@ get_X_from_formula <- function(formula, data, treat, method, estimand, target = 
     new.f.terms <- attr(formula_without_treat, "new.f.terms")
     X <- do.call("cbind", lapply(seq_along(new.f.terms), function(i) {
       if (interacts_with_treat[i]) {
-        out <- do.call("cbind", lapply(which(assign == new.f.terms[i]), function(j) {
+        do.call("cbind", lapply(which(assign == new.f.terms[i]), function(j) {
           out_ <- t_mat * covs[,j]
           colnames(out_) <- paste(colnames(t_mat), colnames(covs)[j], sep = ":")
           out_
         }))
       }
       else {
-        out <- covs[,assign == new.f.terms[i], drop = FALSE]
+        covs[,assign == new.f.terms[i], drop = FALSE]
       }
-      return(out)
     }))
 
     #Add treatment and intercept to X
@@ -68,7 +69,7 @@ get_X_from_formula <- function(formula, data, treat, method, estimand, target = 
     covs_int <- do.call("cbind", lapply(seq_len(ncol(covs)), function(i) {
       out <- t_mat * covs[,i]
       colnames(out) <- paste(colnames(t_mat), colnames(covs)[i], sep = ":")
-      return(out)
+      out
     }))
 
     X <- cbind(1, t_mat, covs, covs_int)
@@ -77,21 +78,19 @@ get_X_from_formula <- function(formula, data, treat, method, estimand, target = 
 
   attr(mf, "terms") <- NULL
 
-  return(list(X = X, mf = mf, target = target))
+  list(X = X, mf = mf, target = target)
 }
 
-scale_covs <- function(covs, treat, target = NULL, s.weights = NULL, focal = NULL) {
+center_covs <- function(covs, treat, target = NULL, s.weights = NULL, focal = NULL) {
   if (!is.null(focal)) {
-    scaled_covs <- sweep(covs, 2L, colMeans_w(covs, s.weights, subset = treat == focal), check.margin = FALSE)
+    sweep(covs, 2L, colMeans_w(covs, s.weights, subset = treat == focal), check.margin = FALSE)
   }
   else if (!is.null(target)) {
-    scaled_covs <- sweep(covs, 2L, target, check.margin = FALSE)
+    sweep(covs, 2L, target, check.margin = FALSE)
   }
   else {
-    scaled_covs <- sweep(covs, 2L, colMeans_w(covs, s.weights), check.margin = FALSE)
+    sweep(covs, 2L, colMeans_w(covs, s.weights), check.margin = FALSE)
   }
-
-  scaled_covs
 }
 
 remove_treat_from_formula <- function(formula, treat) {
@@ -103,8 +102,10 @@ remove_treat_from_formula <- function(formula, treat) {
 
   #Extract terms that interact w/ treat
   new.f.terms <- colnames(tt.factors)
-  if (treat %in% rownames(tt.factors)) interacts_with_treat <- tt.factors[treat,] > 0
-  else interacts_with_treat <- rep(FALSE, NCOL(tt.factors))
+  interacts_with_treat <- {
+    if (treat %in% rownames(tt.factors)) tt.factors[treat,] > 0
+    else rep(FALSE, NCOL(tt.factors))
+  }
 
   #Remove treat from interactions
   for (i in seq_along(new.f.terms)[interacts_with_treat]) {
@@ -112,17 +113,15 @@ remove_treat_from_formula <- function(formula, treat) {
   }
 
   #Reconstruct formula and dataset without treat
-  if (length(new.f.terms) > 0) {
-    formula_without_treat <- terms(reformulate(new.f.terms, intercept = TRUE))
-  }
-  else {
-    formula_without_treat <- terms(~1)
+  formula_without_treat <- {
+    if (length(new.f.terms) == 0) terms(~1)
+    else terms(reformulate(new.f.terms, intercept = TRUE))
   }
 
   attr(formula_without_treat, "new.f.terms") <- new.f.terms
   attr(formula_without_treat, "interacts_with_treat") <- setNames(interacts_with_treat, new.f.terms)
 
-  return(formula_without_treat)
+  formula_without_treat
 }
 
 get_1st_stage_X_from_formula_iv <- function(formula, data, treat, iv, method, estimand, target = NULL,
@@ -141,7 +140,9 @@ get_1st_stage_X_from_formula_iv <- function(formula, data, treat, iv, method, es
 
   mf <- model.frame(formula_without_treat, data = data, na.action = "na.pass")
 
-  if (anyNA(mf)) stop("Missing values are not allowed in the covariates.", call. = FALSE)
+  if (anyNA(mf)) {
+    chk::err("missing values are not allowed in the covariates")
+  }
 
   mf <- process_mf(mf)
 
@@ -152,7 +153,9 @@ get_1st_stage_X_from_formula_iv <- function(formula, data, treat, iv, method, es
 
   iv_mf <- model.frame(iv, data = data, na.action = "na.pass")
 
-  if (anyNA(iv_mf)) stop("Missing values are not allowed in the instrumental variable(s).", call. = FALSE)
+  if (anyNA(iv_mf)) {
+    chk::err("missing values are not allowed in the instrumental variable(s)")
+  }
 
   iv_mf <- process_mf(iv_mf)
 
@@ -165,7 +168,7 @@ get_1st_stage_X_from_formula_iv <- function(formula, data, treat, iv, method, es
 
   #Center covariates at mean based on estimand; only affects weights if there
   #are interactions w/ treatment
-  covs <- scale_covs(covs, treat, target, s.weights, focal)
+  covs <- center_covs(covs, treat, target, s.weights, focal)
 
   t_mat <- do.call("cbind", lapply(levels(treat)[-1], function(j) as.numeric(treat == j)))
   colnames(t_mat) <- paste0(treat_name, levels(treat)[-1])
@@ -199,14 +202,14 @@ get_1st_stage_X_from_formula_iv <- function(formula, data, treat, iv, method, es
     Xiv <- cbind(iv_mm, do.call("cbind", lapply(seq_len(ncol(covs)), function(i) {
       out <- iv_mm * covs[,i]
       colnames(out) <- paste(colnames(iv_mm), colnames(covs)[i], sep = ":")
-      return(out)
+      out
     })))
 
     #Create 1st stage LHS matrix of endogenous vars from treat and treat-cov interactions
     t_int <- do.call("cbind", lapply(seq_len(ncol(covs)), function(i) {
       out <- t_mat * covs[,i]
       colnames(out) <- paste(colnames(t_mat), colnames(covs)[i], sep = ":")
-      return(out)
+      out
     }))
   }
 
@@ -219,7 +222,7 @@ get_1st_stage_X_from_formula_iv <- function(formula, data, treat, iv, method, es
 
   attr(mf, "terms") <- NULL
 
-  return(list(X = X, mf = mf, target = target, A = A))
+  list(X = X, mf = mf, target = target, A = A)
 }
 
 get_2nd_stage_X_from_formula_iv <- function(formula, data, treat, treat_fitted, method, estimand, target = NULL,
@@ -233,5 +236,5 @@ get_2nd_stage_X_from_formula_iv <- function(formula, data, treat, treat_fitted, 
 
   out$X[,colnames(treat_fitted)] <- treat_fitted
 
-  return(out)
+  out
 }

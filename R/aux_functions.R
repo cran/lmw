@@ -13,26 +13,25 @@ match_arg <- function(arg, choices, several.ok = FALSE) {
   }
 
   if (is.null(arg)) return(choices[1L])
-  else if (!is.character(arg))
-    stop(paste0("The argument to '", arg.name, "' must be NULL or a character vector"), call. = FALSE)
+  if (!is.character(arg))
+    chk::err(sprintf("the argument to `%s` must be NULL or a character vector", arg.name))
 
   if (!several.ok) {
     if (identical(arg, choices)) return(arg[1L])
     if (length(arg) > 1L) {
-      stop(paste0("The argument to '", arg.name, "' must be of length 1"), call. = FALSE)
+      chk::err(sprintf("the argument to `%s` must be of length 1", arg.name))
     }
   }
   else if (length(arg) == 0) {
-    stop(paste0("The argument to '", arg.name, "' must be of length >= 1"), call. = FALSE)
+    chk::err(sprintf("the argument to `%s` must be of length >= 1", arg.name))
   }
 
   i <- pmatch(arg, choices, nomatch = 0L, duplicates.ok = TRUE)
   if (all(i == 0L))
-    stop(sprintf("The argument to '%s' should be %s%s.",
-                 arg.name,
-                 ngettext(length(choices), "", if (several.ok) "at least one of " else "one of "),
-                 word_list(choices, and.or = "or", quotes = 2)),
-         call. = FALSE)
+    chk::err(sprintf("the argument to `%s` should be %s%s",
+                     arg.name,
+                     ngettext(length(choices), "", if (several.ok) "at least one of " else "one of "),
+                     word_list(choices, and.or = "or", quotes = 2)))
 
   i <- i[i > 0L]
 
@@ -67,7 +66,7 @@ word_list <- function(word.list = NULL, and.or = c("and", "or"), is.are = FALSE,
       attr(out, "plural") <- FALSE
     }
     else {
-      and.or <- match_arg(and.or)
+      and.or <- match_arg(and.or, c("and", "or"))
       if (L == 2) {
         out <- paste(word.list, collapse = paste0(" ", and.or," "))
       }
@@ -81,15 +80,17 @@ word_list <- function(word.list = NULL, and.or = c("and", "or"), is.are = FALSE,
     }
 
   }
-  return(out)
+
+  out
 }
 
 #Add quotation marks around a string.
 add_quotes <- function(x, quotes = 2L) {
   if (!isFALSE(quotes)) {
-    if (isTRUE(quotes) || as.integer(quotes) == 2L) x <- paste0("\"", x, "\"")
+    if (is.character(quotes)) x <- paste0(quotes, x, quotes)
+    else if (isTRUE(quotes) || as.integer(quotes) == 2L) x <- paste0("\"", x, "\"")
     else if (as.integer(quotes) == 1L) x <- paste0("\'", x, "\'")
-    else stop("'quotes' must be boolean, 1, or 2.")
+    else stop("'quotes' must be a string, boolean, 1, or 2.")
   }
   x
 }
@@ -108,7 +109,8 @@ colMeans_w <- function(mat, w = NULL, subset = NULL) {
   }
 
   if (length(w) == 0) return(colSums(mat)/nrow(mat))
-  else return(colSums(mat * w)/sum(w))
+
+  colSums(mat * w)/sum(w)
 }
 
 #Weighted mean (faster than weighted.mean())
@@ -119,7 +121,8 @@ mean_w <- function(x, w = NULL, subset = NULL) {
   }
 
   if (length(w) == 0) return(sum(x)/length(x))
-  else return(sum(x * w)/sum(w))
+
+  sum(x * w)/sum(w)
 }
 
 #(Weighted) variance that uses special formula for binary variables
@@ -149,7 +152,8 @@ var_w <- function(x, bin.var = NULL, w = NULL, subset = NULL) {
 can_str2num <- function(x) {
   nas <- is.na(x)
   suppressWarnings(x_num <- as.numeric(as.character(x[!nas])))
-  return(!anyNA(x_num))
+
+  !anyNA(x_num)
 }
 
 #Cleanly coerces a character vector to numeric; best to use after can_str2num()
@@ -157,7 +161,8 @@ str2num <- function(x) {
   nas <- is.na(x)
   suppressWarnings(x_num <- as.numeric(as.character(x)))
   x_num[nas] <- NA
-  return(x_num)
+
+  x_num
 }
 
 #Clean printing of data frames with numeric and NA elements.
@@ -167,7 +172,9 @@ round_df_char <- function(df, digits, pad = "0", na_vals = ".") {
   #na_vals is what NA should print as.
 
   if (NROW(df) == 0 || NCOL(df) == 0) return(df)
-  if (!is.data.frame(df)) df <- as.data.frame.matrix(df, stringsAsFactors = FALSE)
+  if (!is.data.frame(df)) {
+    df <- as.data.frame.matrix(df, stringsAsFactors = FALSE)
+  }
   rn <- rownames(df)
   cn <- colnames(df)
 
@@ -216,7 +223,7 @@ round_df_char <- function(df, digits, pad = "0", na_vals = ".") {
   if (length(cn) > 0) names(df) <- cn
 
   attr(df, "na_vals") <- na_vals
-  return(df)
+  df
 }
 
 #Adds perentheses around a number in SD columns; e.g., 5.46 -> (5.46)
@@ -261,19 +268,22 @@ covs_df_to_matrix <- function(covs) {
   X <- X[,-1, drop=FALSE]
   attr(X, "assign") <- assign
 
-  return(X)
+  X
 }
 
 #Quickly compute diagonal of hat matrix without having to compute
-#full project matrix. Uses a special formula with a fixed effects (f)
+#full projection matrix. Uses a special formula when a fixed effect (f)
 #is present to simplify calculation. Assumes X first column is an
 #intercept.
 hat_fast <- function(X, w = NULL, f = NULL) {
   if (is.null(f)) {
-    if (is.null(w)) QR <- qr.default(X)
-    else QR <- qr.default(sqrt(w) * X)
+    QR <- {
+      if (is.null(w)) qr.default(X)
+      else qr.default(sqrt(w) * X)
+    }
 
     Q <- qr.qy(QR, diag(1, nrow = nrow(QR$qr), ncol = QR$rank))
+
     return(rowSums(Q * Q))
   }
 
@@ -291,7 +301,7 @@ hat_fast <- function(X, w = NULL, f = NULL) {
 
   diag_h_X <- hat_fast(.lm.fit(rw*fmm, rw*X[,-1, drop = FALSE])$residuals/rw, w)
 
-  return(diag_h_f + diag_h_X)
+  diag_h_f + diag_h_X
 }
 
 treat_name_from_coefs <- function(coef_names, treat_levels) {
@@ -302,6 +312,7 @@ treat_name_from_coefs <- function(coef_names, treat_levels) {
       return(treat)
     }
   }
+
   return("")
 }
 
@@ -311,17 +322,16 @@ treat_levels_from_coefs <- function(coef_names, treat_levels, treat_name = NULL)
   }
 
   coef_levels <- sub(treat_name, "", coef_names, fixed = TRUE)
-  return(c(setdiff(treat_levels, coef_levels), coef_levels))
+
+  c(setdiff(treat_levels, coef_levels), coef_levels)
 }
 
 #Group mean centers a variable x for a factor f. For
 #use with fixed effects.
 demean <- function(x, f, w = NULL) {
+  f <- as.factor(f)
   for (i in levels(f)) {
-    x[f == i] <- {
-      if (is.null(w)) x[f == i] - mean(x[f == i])
-      else  x[f == i] - mean_w(x[f == i], w[f == i])
-    }
+    x[f == i] <- x[f == i] - mean_w(x, w, subset = f == i)
   }
   x
 }

@@ -209,8 +209,7 @@
 #' `lmw_iv` objects; [influence.lmw()] for influence measures;
 #' `ivreg()` in the \pkg{ivreg} package for fitting 2SLS models.
 #'
-#' @references Chattopadhyay, A., & Zubizarreta, J. R. (2022). On the implied
-#' weights of linear regression for causal inference. *Biometrika*, asac058. \doi{10.1093/biomet/asac058}
+#' @references Chattopadhyay, A., & Zubizarreta, J. R. (2023). On the implied weights of linear regression for causal inference. *Biometrika*, 110(3), 615–629. \doi{10.1093/biomet/asac058}
 #'
 #' @examples
 #' # URI for the ATT using instrument `Ins`
@@ -227,9 +226,11 @@ lmw_iv <- function(formula, data = NULL, estimand = "ATE", method = "URI", treat
   call <- match.call()
 
   if (missing(iv)) {
-    stop("An argument to 'iv' specifying the instrumental variable(s) is required.", call. = FALSE)
+    chk::err("an argument to `iv` specifying the instrumental variable(s) is required")
   }
 
+  chk::chk_string(method)
+  method <- toupper(method)
   method <- match_arg(method, c("URI", "MRI"))
 
   estimand <- process_estimand(estimand, target, obj)
@@ -254,7 +255,7 @@ lmw_iv <- function(formula, data = NULL, estimand = "ATE", method = "URI", treat
   #treat_contrast has levels re-ordered so contrast is first
   treat_contrast <- apply_contrast_to_treat(treat, contrast)
 
-  focal <- process_focal(focal, treat_contrast, estimand)
+  focal <- process_focal(focal, treat_contrast, estimand, obj)
 
   iv <- process_iv(iv, formula, data)
 
@@ -281,7 +282,7 @@ lmw_iv <- function(formula, data = NULL, estimand = "ATE", method = "URI", treat
               focal = focal)
 
   class(out) <- c("lmw_iv", "lmw")
-  return(out)
+  out
 }
 
 #' @exportS3Method print lmw_iv
@@ -310,4 +311,6 @@ print.lmw_iv <- function(x, ...) {
     cat(sprintf(" - fixed effect: %s\n",
                 attr(x$fixef, "fixef_name")))
   }
+
+  invisible(x)
 }

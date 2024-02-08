@@ -77,6 +77,14 @@
 
 #' @exportS3Method summary lmw_est
 summary.lmw_est <- function(object, model = FALSE, ci = TRUE, alpha = .05, ...) {
+  chk::chk_flag(model)
+  chk::chk_flag(ci)
+  chk::chk_number(alpha)
+
+  if ("cluster" %in% ...names()) {
+    chk::wrn("`cluster` is not an allowable argument to `summary.lmw_est()`; did you mean to supply it to `lmw_est()`?")
+  }
+
   treat_coef_inds <- seq_along(object$treat_levels)
 
   object$vcov <- .vcov.aliased(is.na(object$coefficients), object$vcov)
@@ -227,7 +235,7 @@ summary.lmw_est <- function(object, model = FALSE, ci = TRUE, alpha = .05, ...) 
               fixef_name = attr(object$fixef, "fixef_name"))
 
   class(ans) <- "summary.lmw_est"
-  return(ans)
+  ans
 }
 
 #' @exportS3Method print summary.lmw_est
@@ -308,6 +316,7 @@ print.summary.lmw_est <- function(x, digits = max(3, getOption("digits") - 3),
                                            digits = digits), sep = "")
 
   }
+
   invisible(x)
 }
 
@@ -345,7 +354,7 @@ estfun.lmw_est <- function (x, ...) {
   attr(rval, "assign") <- NULL
   attr(rval, "contrasts") <- NULL
 
-  return(rval)
+  rval
 }
 
 #' @exportS3Method vcov lmw_est
@@ -366,7 +375,8 @@ bread.lmw_est <- function(x, ...) {
 
   b <- cov.unscaled * sum(x$weights > 0)
   dimnames(b) <- list(names(x$coefficients[p1]), names(x$coefficients[p1]))
-  return(b)
+
+  b
 }
 
 #' @exportS3Method weights lmw_est
@@ -381,7 +391,7 @@ weights.lmw_est <- function(object, ...) {
 #' @exportS3Method predict lmw_est
 predict.lmw_est <- function(object, newdata, ...) {
  if (!missing(newdata)) {
-   warning("`predict()` cannot be used with `lmw_est` objects to generate predictions for new observations. Returning fitted values from the original dataset.")
+   chk::wrn("`predict()` cannot be used with `lmw_est` objects to generate predictions for new observations. Returning fitted values from the original dataset")
  }
   object$fitted.values
 }

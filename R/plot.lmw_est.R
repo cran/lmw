@@ -66,12 +66,15 @@
 
 #' @exportS3Method plot lmw_est
 plot.lmw_est <- function(x, type = "influence", ...) {
+  chk::chk_string(type)
+  type <- tolower(type)
   type <- match_arg(type, c("influence", "lm"))
 
   if (type == "influence") {
     influence_plot(x, ...)
   }
   else if (type == "lm") {
+    plot.lm <- utils::getS3method("plot", "lm", envir = asNamespace("stats"))
     # Need to assign `"lm"` as last class and explicitly call
     # plot.lm() to get lm plots to work.
     cl <- class(x)
@@ -83,5 +86,3 @@ plot.lmw_est <- function(x, type = "influence", ...) {
   invisible(x)
 }
 
-# To be used internally
-plot.lm <- utils::getS3method("plot", "lm")
